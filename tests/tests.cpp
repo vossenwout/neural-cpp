@@ -168,3 +168,25 @@ TEST(TensorTest, Matmul)
         }
     }
 }
+TEST(TensorTest, BackwardAdditionAndMatmul)
+{
+    std::shared_ptr<Tensor> a = std::make_shared<Tensor>(2.0f, true);
+    std::shared_ptr<Tensor> b = std::make_shared<Tensor>(3.0f, true);
+    std::shared_ptr<Tensor> c = (*a) + b;
+    c->backward();
+    EXPECT_EQ(a->grad()[0], 1.0f);
+    EXPECT_EQ(b->grad()[0], 1.0f);
+
+    std::shared_ptr<Tensor> x =
+        std::make_shared<Tensor>(std::vector<float>{1.0f, 2.0f, 3.0f}, true);
+    std::shared_ptr<Tensor> y =
+        std::make_shared<Tensor>(std::vector<float>{4.0f, 5.0f, 6.0f}, true);
+    std::shared_ptr<Tensor> z = (*x) * y;
+    z->backward();
+    EXPECT_FLOAT_EQ(x->grad()[0], 4.0f);
+    EXPECT_FLOAT_EQ(x->grad()[1], 5.0f);
+    EXPECT_FLOAT_EQ(x->grad()[2], 6.0f);
+    EXPECT_FLOAT_EQ(y->grad()[0], 1.0f);
+    EXPECT_FLOAT_EQ(y->grad()[1], 2.0f);
+    EXPECT_FLOAT_EQ(y->grad()[2], 3.0f);
+}
