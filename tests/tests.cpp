@@ -1,5 +1,11 @@
+#include "nn/modules/flatten.h"
+#include "nn/modules/linear.h"
+#include "nn/modules/relu.h"
+#include "nn/serialization.h"
 #include "nn/tensor.h"
+#include <fstream>
 #include <gtest/gtest.h>
+#include <iostream>
 #include <memory>
 #include <vector>
 
@@ -189,4 +195,175 @@ TEST(TensorTest, BackwardAdditionAndMatmul)
     EXPECT_FLOAT_EQ(y->grad()[0], 1.0f);
     EXPECT_FLOAT_EQ(y->grad()[1], 2.0f);
     EXPECT_FLOAT_EQ(y->grad()[2], 3.0f);
+}
+
+TEST(ModuleTest, SerializationTest)
+{
+    class NeuralNetwork : public Module
+    {
+    private:
+        // layers
+        std::shared_ptr<Flatten> _flatten = std::make_shared<Flatten>();
+        std::shared_ptr<Linear> _linear_1;
+        std::shared_ptr<Linear> _linear_2;
+        std::shared_ptr<Linear> _linear_3;
+        // activation
+        std::shared_ptr<Relu> _relu = std::make_shared<Relu>();
+
+    public:
+        NeuralNetwork(int seed)
+        {
+            _linear_1 = std::make_shared<Linear>(5 * 5, 5, seed);
+            _linear_2 = std::make_shared<Linear>(5, 10, seed);
+            _linear_3 = std::make_shared<Linear>(10, 10, seed);
+            register_module("linear_1", _linear_1);
+            register_module("linear_2", _linear_2);
+            register_module("linear_3", _linear_3);
+        }
+        std::shared_ptr<Tensor> forward(std::shared_ptr<Tensor> input)
+        {
+            std::shared_ptr<Tensor> flat = (*_flatten)(input);
+            std::shared_ptr<Tensor> linear_1 = (*_linear_1)(flat);
+            std::shared_ptr<Tensor> relu_1 = (*_relu)(linear_1);
+            std::shared_ptr<Tensor> linear_2 = (*_linear_2)(relu_1);
+            std::shared_ptr<Tensor> relu_2 = (*_relu)(linear_2);
+            std::shared_ptr<Tensor> linear_3 = (*_linear_3)(relu_2);
+            return linear_3;
+        }
+    };
+
+    NeuralNetwork network_1(42);
+    auto params = network_1.parameters();
+
+    // Save state_dict
+    auto state_dict = network_1.state_dict();
+    save(state_dict, "state_dict.nn");
+
+    NeuralNetwork network_2(77);
+    auto params_2 = network_2.parameters();
+
+    // confirm that params 1 is different from params 2 for layers 1, 3, 5
+    EXPECT_NE(params[0].second->data()[0], params_2[0].second->data()[0]);
+    EXPECT_NE(params[2].second->data()[0], params_2[2].second->data()[0]);
+    EXPECT_NE(params[4].second->data()[0], params_2[4].second->data()[0]);
+
+    // Load state_dict
+    auto loaded_state_dict = load("state_dict.nn");
+    network_2.load_state_dict(loaded_state_dict);
+
+    // confirm that params 1 is the same as params 2 for layers 1, 3, 5
+    EXPECT_EQ(params[0].second->data()[0], params_2[0].second->data()[0]);
+    EXPECT_EQ(params[2].second->data()[0], params_2[2].second->data()[0]);
+    EXPECT_EQ(params[4].second->data()[0], params_2[4].second->data()[0]);
+    // delete state_dict file
+    std::remove("state_dict.nn");
+}
+
+TEST(ModuleTest, Parameters)
+{
+    // Test simple module
+    Linear linear(3, 2, 42); // in_features=3, out_features=2, seed=42
+    auto params = linear.parameters();
+    EXPECT_EQ(params.size(), 2);
+    EXPECT_EQ(params[0].first, "weight");
+    EXPECT_EQ(params[1].first, "bias");
+
+    // create a module with nested modules and parameters
+    class NeuralNetwork : public Module
+    {
+    private:
+        // layers
+        std::shared_ptr<Flatten> _flatten = std::make_shared<Flatten>();
+        std::shared_ptr<Linear> _linear_1 = std::make_shared<Linear>(28 * 28, 512);
+        std::shared_ptr<Linear> _linear_2 = std::make_shared<Linear>(512, 512);
+        std::shared_ptr<Linear> _linear_3 = std::make_shared<Linear>(512, 10);
+        // activation
+        std::shared_ptr<Relu> _relu = std::make_shared<Relu>();
+
+    public:
+        NeuralNetwork()
+        {
+            register_module("linear_1", _linear_1);
+            register_module("linear_2", _linear_2);
+            register_module("linear_3", _linear_3);
+        }
+        std::shared_ptr<Tensor> forward(std::shared_ptr<Tensor> input)
+        {
+            std::shared_ptr<Tensor> flat = (*_flatten)(input);
+            std::shared_ptr<Tensor> linear_1 = (*_linear_1)(flat);
+            std::shared_ptr<Tensor> relu_1 = (*_relu)(linear_1);
+            std::shared_ptr<Tensor> linear_2 = (*_linear_2)(relu_1);
+            std::shared_ptr<Tensor> relu_2 = (*_relu)(linear_2);
+            std::shared_ptr<Tensor> linear_3 = (*_linear_3)(relu_2);
+            return linear_3;
+        }
+    };
+
+    NeuralNetwork network;
+    auto params_2 = network.parameters();
+    EXPECT_EQ(params_2.size(), 6);
+    EXPECT_EQ(params_2[0].first, "linear_1.weight");
+    EXPECT_EQ(params_2[1].first, "linear_1.bias");
+    EXPECT_EQ(params_2[2].first, "linear_2.weight");
+    EXPECT_EQ(params_2[3].first, "linear_2.bias");
+    EXPECT_EQ(params_2[4].first, "linear_3.weight");
+    EXPECT_EQ(params_2[5].first, "linear_3.bias");
+}
+
+TEST(ModuleTest, Flatten)
+{
+    // flatten 0d tensor
+    std::shared_ptr<Tensor> a = std::make_shared<Tensor>(2.0f);
+    std::shared_ptr<Flatten> flatten = std::make_shared<Flatten>();
+    std::shared_ptr<Tensor> b = (*flatten)(a);
+    EXPECT_EQ(b->shape(), std::vector<std::size_t>({1}));
+    EXPECT_EQ(b->item(), 2.0f);
+
+    // flatten 1d tensor
+    std::shared_ptr<Tensor> c = std::make_shared<Tensor>(std::vector<float>{1.0, 2.0, 3.0});
+    std::shared_ptr<Tensor> d = (*flatten)(c);
+    EXPECT_EQ(d->shape(), std::vector<std::size_t>({3}));
+    EXPECT_EQ((*d)(0), 1.0f);
+    EXPECT_EQ((*d)(1), 2.0f);
+    EXPECT_EQ((*d)(2), 3.0f);
+
+    // flatten 2d tensor
+    std::shared_ptr<Tensor> e =
+        std::make_shared<Tensor>(std::vector<std::vector<float>>{{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}});
+    std::shared_ptr<Tensor> f = (*flatten)(e);
+    EXPECT_EQ(f->shape(), std::vector<std::size_t>({6}));
+    EXPECT_EQ((*f)(0), 1.0f);
+    EXPECT_EQ((*f)(1), 2.0f);
+    EXPECT_EQ((*f)(2), 3.0f);
+    EXPECT_EQ((*f)(3), 4.0f);
+    EXPECT_EQ((*f)(4), 5.0f);
+    EXPECT_EQ((*f)(5), 6.0f);
+}
+
+TEST(TensorTest, Linear)
+{
+    std::shared_ptr<Tensor> a = std::make_shared<Tensor>(std::vector<float>{1.0, 2.0, 3.0});
+    Linear linear(3, 2, 7);
+    std::shared_ptr<Tensor> b = linear(a);
+    EXPECT_EQ(b->shape(), std::vector<std::size_t>({2}));
+    EXPECT_NEAR((*b)(0), -0.13753, 1e-5);
+    EXPECT_NEAR((*b)(1), 2.26260, 1e-5);
+}
+
+TEST(ModuleTest, Relu)
+{
+    std::shared_ptr<Tensor> a = std::make_shared<Tensor>(std::vector<float>{1.0, 2.0, 3.0});
+    Relu relu;
+    std::shared_ptr<Tensor> b = relu(a);
+    EXPECT_EQ(b->shape(), std::vector<std::size_t>({3}));
+    EXPECT_EQ((*b)(0), 1.0f);
+    EXPECT_EQ((*b)(1), 2.0f);
+    EXPECT_EQ((*b)(2), 3.0f);
+
+    std::shared_ptr<Tensor> c = std::make_shared<Tensor>(std::vector<float>{-1.0, -2.0, -3.0});
+    std::shared_ptr<Tensor> d = relu(c);
+    EXPECT_EQ(d->shape(), std::vector<std::size_t>({3}));
+    EXPECT_EQ((*d)(0), 0.0f);
+    EXPECT_EQ((*d)(1), 0.0f);
+    EXPECT_EQ((*d)(2), 0.0f);
 }

@@ -42,6 +42,7 @@ public:
     void add_to_grad(const std::vector<float> &grad_update);
     void zero_grad();
     std::size_t numel() const;
+    std::vector<float> &data();
     void backward();
     std::shared_ptr<Tensor> operator+(std::shared_ptr<Tensor> other);
     std::shared_ptr<Tensor> operator*(std::shared_ptr<Tensor> other);

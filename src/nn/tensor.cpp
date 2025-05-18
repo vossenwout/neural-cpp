@@ -664,6 +664,8 @@ void Tensor::_reset_graph_visit()
 
 std::size_t Tensor::numel() const { return _data.size(); }
 
+std::vector<float> &Tensor::data() { return _data; }
+
 std::ostream &operator<<(std::ostream &os, const Tensor &obj)
 {
     std::string string_repr = "[";
