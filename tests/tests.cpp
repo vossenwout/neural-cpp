@@ -1,13 +1,14 @@
 #include "nn/modules/flatten.h"
 #include "nn/modules/linear.h"
+#include "nn/modules/loss.h"
 #include "nn/modules/relu.h"
+#include "nn/modules/softmax.h"
 #include "nn/serialization.h"
+#include "nn/sgd.h"
 #include "nn/tensor.h"
 #include <fstream>
 #include <gtest/gtest.h>
 #include <iostream>
-#include <memory>
-#include <vector>
 
 TEST(TensorTest, Creation)
 {
@@ -366,4 +367,193 @@ TEST(ModuleTest, Relu)
     EXPECT_EQ((*d)(0), 0.0f);
     EXPECT_EQ((*d)(1), 0.0f);
     EXPECT_EQ((*d)(2), 0.0f);
+}
+
+TEST(ModuleTest, Softmax)
+{
+    std::shared_ptr<Tensor> a = std::make_shared<Tensor>(std::vector<float>{1.0, 2.0, 3.0});
+    Softmax softmax;
+    std::shared_ptr<Tensor> b = softmax(a);
+    EXPECT_EQ(b->shape(), std::vector<std::size_t>({3}));
+    EXPECT_NEAR((*b)(0), 0.09003, 1e-5);
+    EXPECT_NEAR((*b)(1), 0.24473, 1e-5);
+    EXPECT_NEAR((*b)(2), 0.66524, 1e-5);
+}
+TEST(LossTest, NLLLossForward)
+{
+    // Basic forward pass without grad
+    std::shared_ptr<Tensor> input1 = std::make_shared<Tensor>(std::vector<float>{0.1f, 0.2f, 0.7f});
+    NLLLoss nll_loss;
+    std::size_t target1 = 2;
+    std::shared_ptr<Tensor> loss1 = nll_loss(input1, target1);
+
+    EXPECT_EQ(loss1->shape().size(), 0);
+    EXPECT_FALSE(loss1->requires_grad());
+    EXPECT_NEAR(loss1->item(), -std::log(0.7f), 1e-6);
+
+    // Near-zero probability clamped
+    std::shared_ptr<Tensor> input2 =
+        std::make_shared<Tensor>(std::vector<float>{1e-15f, 0.5f, 0.5f});
+    std::size_t target2 = 0;
+    std::shared_ptr<Tensor> loss2 = nll_loss(input2, target2);
+    EXPECT_NEAR(loss2->item(), -std::log(1e-12f), 1e-6);
+
+    // Basic backward pass
+    std::shared_ptr<Tensor> input_3 =
+        std::make_shared<Tensor>(std::vector<float>{0.1f, 0.2f, 0.7f}, true);
+    std::size_t target_3 = 2;
+    std::shared_ptr<Tensor> loss_3 = nll_loss(input_3, target_3);
+
+    EXPECT_TRUE(loss_3->requires_grad());
+    loss_3->backward();
+
+    ASSERT_EQ(input_3->grad().size(), 3);
+    EXPECT_FLOAT_EQ(input_3->grad()[0], 0.0f);
+    EXPECT_FLOAT_EQ(input_3->grad()[1], 0.0f);
+    EXPECT_NEAR(input_3->grad()[2], -1.0f / 0.7f, 1e-6);
+
+    // error handling
+    std::shared_ptr<Tensor> input_4 =
+        std::make_shared<Tensor>(std::vector<std::vector<float>>{{0.1f, 0.9f}});
+    std::size_t target_4 = 0;
+    EXPECT_THROW(nll_loss(input_4, target_4), std::runtime_error);
+
+    // Test target out of bounds
+    std::shared_ptr<Tensor> input_5 = std::make_shared<Tensor>(std::vector<float>{0.1f, 0.9f});
+    std::size_t target_5 = 2;
+    EXPECT_THROW(nll_loss(input_5, target_5), std::runtime_error);
+
+    // Test target out of bounds (negative equivalent, size_t wrap around)
+    std::shared_ptr<Tensor> input_6 = std::make_shared<Tensor>(std::vector<float>{0.1f, 0.9f});
+    std::size_t target_6 = -1;
+    EXPECT_THROW(nll_loss(input_6, target_6), std::runtime_error);
+}
+
+TEST(LossTest, CrossEntropyLossForward)
+{
+    // Basic forward pass without grad
+    std::shared_ptr<Tensor> input1 = std::make_shared<Tensor>(std::vector<float>{1.0f, 2.0f, 3.0f});
+    CrossEntropyLoss ce_loss;
+    std::size_t target1 = 2;
+    std::shared_ptr<Tensor> loss1 = ce_loss(input1, target1);
+
+    EXPECT_EQ(loss1->shape().size(), 0);
+    EXPECT_FALSE(loss1->requires_grad());
+    EXPECT_NEAR(loss1->item(), 0.40761f, 1e-5);
+
+    // Basic backward pass
+    std::shared_ptr<Tensor> input_2 =
+        std::make_shared<Tensor>(std::vector<float>{1.0f, 2.0f, 3.0f}, true);
+    std::size_t target_2 = 2;
+    std::shared_ptr<Tensor> loss_2 = ce_loss(input_2, target_2);
+
+    EXPECT_TRUE(loss_2->requires_grad());
+    loss_2->backward();
+
+    ASSERT_EQ(input_2->grad().size(), 3);
+    EXPECT_NEAR(input_2->grad()[0], 0.09003f, 1e-5);
+    EXPECT_NEAR(input_2->grad()[1], 0.24473f, 1e-5);
+    EXPECT_NEAR(input_2->grad()[2], -0.33476f, 1e-5);
+
+    // error handling: incorrect input shape
+    std::shared_ptr<Tensor> input_3 =
+        std::make_shared<Tensor>(std::vector<std::vector<float>>{{1.0f, 2.0f}});
+    std::size_t target_3 = 0;
+    EXPECT_THROW(ce_loss(input_3, target_3), std::runtime_error);
+
+    // Test target out of bounds
+    std::shared_ptr<Tensor> input_4 = std::make_shared<Tensor>(std::vector<float>{1.0f, 2.0f});
+    std::size_t target_4 = 2;
+    EXPECT_THROW(ce_loss(input_4, target_4), std::runtime_error);
+}
+
+TEST(SGDTest, Step)
+{
+    class NeuralNetwork : public Module
+    {
+    private:
+        std::shared_ptr<Linear> _linear = std::make_shared<Linear>(5, 5, 7);
+        std::shared_ptr<Relu> _relu = std::make_shared<Relu>();
+
+    public:
+        NeuralNetwork() { register_module("linear", _linear); }
+        std::shared_ptr<Tensor> forward(std::shared_ptr<Tensor> input)
+        {
+            std::shared_ptr<Tensor> linear = (*_linear)(input);
+            std::shared_ptr<Tensor> relu = (*_relu)(linear);
+            return relu;
+        }
+    };
+
+    NeuralNetwork network;
+    auto params = network.parameters();
+
+    std::shared_ptr<Tensor> input = std::make_shared<Tensor>(std::vector<float>(5, 1.0f));
+
+    // Copy linear weight
+    std::vector<std::vector<float>> copy_linear_weight(
+        params[0].second->shape()[0], std::vector<float>(params[0].second->shape()[1]));
+    for (size_t i = 0; i < params[0].second->shape()[0]; i++)
+    {
+        for (size_t j = 0; j < params[0].second->shape()[1]; j++)
+        {
+            copy_linear_weight[i][j] = (*params[0].second)(i, j);
+        }
+    }
+
+    // Copy linear bias
+    std::vector<float> copy_linear_bias(params[1].second->shape()[0]);
+    for (size_t i = 0; i < params[1].second->shape()[0]; i++)
+    {
+        copy_linear_bias[i] = (*params[1].second)(i);
+    }
+
+    auto copy_linear_weight_tensor = std::make_shared<Tensor>(copy_linear_weight);
+    auto copy_linear_bias_tensor = std::make_shared<Tensor>(copy_linear_bias);
+
+    auto xW = (*input) * copy_linear_weight_tensor;
+    auto expected_linear_output = (*xW) + copy_linear_bias_tensor;
+
+    SGD sgd(params);
+    CrossEntropyLoss ce_loss;
+    std::size_t target = 1;
+
+    auto output = network(input);
+    auto loss = ce_loss(output, target);
+    loss->backward();
+
+    if ((*expected_linear_output)(1) <= 0)
+    {
+        for (int i = 0; i < params[0].second->shape()[0]; i++)
+        {
+            float grad_val = (*params[0].second).grad()[i * params[0].second->stride()[0] + 1];
+            EXPECT_EQ(grad_val, 0.0f) << "Expected gradient to be 0 at col 1, row " << i;
+        }
+    }
+
+    sgd.step();
+
+    // If gradient is 0, weight must be unchanged
+    if ((*params[0].second).grad()[1] == 0)
+    {
+        float new_weight = (*params[0].second)(0, 1);
+        EXPECT_FLOAT_EQ(new_weight, copy_linear_weight[0][1])
+            << "Weight changed despite zero gradient";
+    }
+
+    // If gradient is > 0, weight should have decreased
+    if ((*params[0].second).grad()[0] > 0)
+    {
+        float updated_weight = (*params[0].second)(0, 0);
+        EXPECT_LT(updated_weight, copy_linear_weight[0][0])
+            << "Weight not updated correctly for non-zero grad";
+    }
+
+    sgd.zero_grad();
+
+    for (size_t i = 0; i < params[0].second->numel(); i++)
+    {
+        EXPECT_FLOAT_EQ((*params[0].second).grad()[i], 0.0f)
+            << "Gradient not reset to 0 at index " << i;
+    }
 }
