@@ -134,6 +134,4 @@ vendor/
 *.gcda
 *.gcov
 
-
-# my dataset
-/data/
+.DS_Store

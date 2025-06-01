@@ -46,5 +46,6 @@ public:
     void backward();
     std::shared_ptr<Tensor> operator+(std::shared_ptr<Tensor> other);
     std::shared_ptr<Tensor> operator*(std::shared_ptr<Tensor> other);
+    std::size_t argmax() const;
     friend std::ostream &operator<<(std::ostream &os, const Tensor &obj);
 };
