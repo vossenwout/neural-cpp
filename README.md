@@ -6,12 +6,12 @@ A lightweight PyTorch-inspired deep learning framework implemented from scratch 
 
 I made a youtube series documenting my journey of building this library. Definitely subscribe if you are interested in AI 😀
 
-- [Part 1: From PyTorch to C++](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
-- [Part 2: Forward Pass](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
-- [Part 3: Automatic Differentiation](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
-- [Part 4: Activation Functions and Modules](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
-- [Part 5: Loss Functions and Gradient Descent](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
-- [Part 6: Training a Neural Network](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
+- [Part 1: From PyTorch to C++](https://youtu.be/BTkIWUupQpk)
+- [Part 2: Forward Pass](https://youtu.be/IJf3HhUJEeg)
+- [Part 3: Automatic Differentiation](https://youtu.be/sqF4tAcOin0)
+- [Part 4: Activation Functions and Modules](https://youtu.be/KTKd-EnLn6U)
+- [Part 5: Loss Functions and Gradient Descent](https://youtu.be/s0P4xH14D1k)
+- [Part 6: Training the Neural Network](https://youtu.be/yrCd-6s4E4A)
 
 ## Features
 
