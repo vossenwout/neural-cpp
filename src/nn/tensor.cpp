@@ -438,7 +438,7 @@ std::shared_ptr<Tensor> Tensor::operator*(std::shared_ptr<Tensor> other)
                 {
                     for (std::size_t j = 0; j < self->shape()[1]; j++)
                     {
-                        // everything from the i_th row contributes ot the i_th child gradient
+                        // everything from the i_th row contributes to the i_th child gradient
                         grad_self.push_back((*other)(j)*grad_output[i]);
                     }
                 }
