@@ -2,6 +2,8 @@
 #include "nn/modules/module.h"
 #include "nn/modules/softmax.h"
 #include "nn/tensor.h"
+#include <algorithm> // std::max
+#include <cmath>     // std::log
 
 std::shared_ptr<Tensor> Loss::forward(std::shared_ptr<Tensor> input)
 {

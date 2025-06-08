@@ -447,7 +447,7 @@ std::shared_ptr<Tensor> Tensor::operator*(std::shared_ptr<Tensor> other)
                 {
                     // iterate through rows for the i'th column
                     float grad_other_i = 0.0f;
-                    for (std::size_t j; j < self->shape()[0]; j++)
+                    for (std::size_t j = 0; j < self->shape()[0]; j++)
                     {
                         // j_th derivated of child propagates to j_th row
                         grad_other_i += (*self)(j, i) * grad_output[j];

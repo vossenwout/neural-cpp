@@ -6,6 +6,7 @@
 #include "nn/serialization.h"
 #include "nn/sgd.h"
 #include "nn/tensor.h"
+#include <cmath>
 #include <fstream>
 #include <gtest/gtest.h>
 #include <iostream>
