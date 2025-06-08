@@ -266,7 +266,7 @@ std::shared_ptr<Tensor> Tensor::operator+(std::shared_ptr<Tensor> other)
                 self->add_to_grad(grad_output);
                 // broadcast in forward == sum in backward
                 float grad_other = 0.0f;
-                for (std::size_t i; i < grad_output.size(); i++)
+                for (std::size_t i = 0; i < grad_output.size(); i++)
                 {
                     grad_other += grad_output[i];
                 }
