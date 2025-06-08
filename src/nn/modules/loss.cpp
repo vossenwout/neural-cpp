@@ -5,7 +5,7 @@
 
 std::shared_ptr<Tensor> Loss::forward(std::shared_ptr<Tensor> input)
 {
-    throw std::runtime_error("Loss expects an inputs and target.");
+    throw std::runtime_error("Loss expects an input and target.");
 }
 
 std::shared_ptr<Tensor> Loss::forward(std::shared_ptr<Tensor> input, std::size_t target)
