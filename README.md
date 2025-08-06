@@ -68,6 +68,11 @@ cd .. # go back to the root directory else the dataset will not be found
 ./cpp_neural
 ```
 
+The MNIST/FashionMNIST raw dataset files should be placed in
+`data/MNIST/raw/` or `data/FashionMNIST/raw/`. If the files are not present,
+download them from the official sources and place them in the corresponding
+directories.
+
 This example demonstrates:
 
 - Loading MNIST/FashionMNIST datasets
