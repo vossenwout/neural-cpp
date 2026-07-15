@@ -46,11 +46,15 @@ I made a youtube series documenting my journey of building this library. Definit
 
 ### Building
 
+Configure the project with CMake and export `compile_commands.json` for C++ LSPs such as `clangd`:
+
 ```bash
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
+cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+ln -sf build/compile_commands.json compile_commands.json
+cmake --build build -j$(nproc)
 ```
+
+Rerun the CMake configure command when build configuration changes, such as adding new `.cpp` files, editing `CMakeLists.txt`, or changing compiler flags/dependencies.
 
 ### Running Tests
 
@@ -65,7 +69,7 @@ The repository includes a complete MNIST/FashionMNIST classification training ex
 
 ```bash
 cd .. # go back to the root directory else the dataset will not be found
-./cpp_neural
+./build/cpp_neural
 ```
 
 This example demonstrates:
